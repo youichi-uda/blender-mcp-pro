@@ -25,6 +25,7 @@ _DEFAULT_TIMEOUT = 30  # seconds
 def _fetch_json(url, headers=None, method="GET", data=None, timeout=_DEFAULT_TIMEOUT):
     """Perform an HTTP request and return parsed JSON."""
     req = urllib.request.Request(url, method=method)
+    req.add_header("User-Agent", "BlenderMCPPro/1.0")
     if headers:
         for key, value in headers.items():
             req.add_header(key, value)
@@ -49,6 +50,7 @@ def _download_file(url, dest_path, timeout=_DEFAULT_TIMEOUT):
     """Download a file from *url* to *dest_path*. Returns True on success."""
     try:
         req = urllib.request.Request(url)
+        req.add_header("User-Agent", "BlenderMCPPro/1.0")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             with open(dest_path, "wb") as fh:
                 fh.write(resp.read())
