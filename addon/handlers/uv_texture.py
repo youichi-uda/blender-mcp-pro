@@ -272,60 +272,105 @@ def list_uv_maps(object_name):
 
 
 def project_from_view(object_name, camera_name=None):
-    """Project UVs from the current view or a specified camera.
+    """Project UVs from a camera or the scene's active camera.
+
+    Computes UV projection using the camera's view matrix without
+    requiring a 3D viewport context. A camera_name or scene camera
+    is required.
 
     Args:
         object_name: Name of the object to project UVs for.
-        camera_name: Optional camera name to project from. Uses current view if None.
+        camera_name: Camera to project from. Falls back to scene camera.
 
     Returns:
         dict with status and confirmation.
     """
+    from mathutils import Vector
+
     obj = bpy.data.objects.get(object_name)
     if obj is None:
         return {"status": "error", "message": f"Object '{object_name}' not found"}
-
     if obj.type != "MESH":
         return {"status": "error", "message": f"Object '{object_name}' is not a mesh"}
 
-    # If a camera is specified, set it as the active camera
-    original_camera = bpy.context.scene.camera
+    # Resolve camera
     if camera_name is not None:
-        camera_obj = bpy.data.objects.get(camera_name)
-        if camera_obj is None:
+        cam_obj = bpy.data.objects.get(camera_name)
+        if cam_obj is None:
             return {"status": "error", "message": f"Camera '{camera_name}' not found"}
-        if camera_obj.type != "CAMERA":
+        if cam_obj.type != "CAMERA":
             return {"status": "error", "message": f"Object '{camera_name}' is not a camera"}
-        bpy.context.scene.camera = camera_obj
+    else:
+        cam_obj = bpy.context.scene.camera
+        if cam_obj is None:
+            return {"status": "error", "message": "No camera specified and no active scene camera"}
 
-    # Select and activate the object
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
+    mesh = obj.data
+    if not mesh.uv_layers:
+        mesh.uv_layers.new(name="UVMap")
+    uv_layer = mesh.uv_layers.active
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
+    # Build camera view-projection matrix
+    scene = bpy.context.scene
+    render = scene.render
+    cam_data = cam_obj.data
+    view_matrix = cam_obj.matrix_world.inverted()
 
-    try:
-        bpy.ops.uv.project_from_view(camera_bounds=camera_name is not None)
-    except Exception as e:
-        bpy.ops.object.mode_set(mode='OBJECT')
-        if camera_name is not None:
-            bpy.context.scene.camera = original_camera
-        return {"status": "error", "message": f"Project from view failed: {str(e)}"}
+    from mathutils import Matrix
+    import math
 
-    bpy.ops.object.mode_set(mode='OBJECT')
+    aspect = (render.resolution_x * render.pixel_aspect_x) / (render.resolution_y * render.pixel_aspect_y)
 
-    # Restore original camera if changed
-    if camera_name is not None:
-        bpy.context.scene.camera = original_camera
+    if cam_data.type == 'ORTHO':
+        scale = cam_data.ortho_scale / 2.0
+        if aspect >= 1.0:
+            sx, sy = 1.0 / (scale * aspect), 1.0 / scale
+        else:
+            sx, sy = 1.0 / scale, aspect / scale
+        proj_matrix = Matrix((
+            (sx, 0, 0, 0),
+            (0, sy, 0, 0),
+            (0, 0, -1, 0),
+            (0, 0, 0, 1),
+        ))
+    else:
+        lens = cam_data.lens
+        sensor = cam_data.sensor_width
+        f = lens / sensor
+        if aspect >= 1.0:
+            sx, sy = f, f * aspect
+        else:
+            sx, sy = f / aspect, f
+        proj_matrix = Matrix((
+            (sx, 0, 0, 0),
+            (0, sy, 0, 0),
+            (0, 0, -1, 0),
+            (0, 0, 0, 1),
+        ))
 
-    source = camera_name if camera_name else "current view"
+    obj_matrix = obj.matrix_world
+
+    for poly in mesh.polygons:
+        for loop_idx in poly.loop_indices:
+            vert_idx = mesh.loops[loop_idx].vertex_index
+            world_co = obj_matrix @ mesh.vertices[vert_idx].co
+            cam_co = proj_matrix @ (view_matrix @ world_co)
+            # Map to 0..1 UV range
+            if abs(cam_co.z) > 1e-8:
+                u = cam_co.x / -cam_co.z * 0.5 + 0.5
+                v = cam_co.y / -cam_co.z * 0.5 + 0.5
+            else:
+                u, v = 0.5, 0.5
+            uv_layer.data[loop_idx].uv = (u, v)
+
+    mesh.update()
+
+    source = camera_name if camera_name else cam_obj.name
     return {
         "status": "success",
         "object": object_name,
         "projected_from": source,
-        "message": f"UVs projected from {source} onto '{object_name}'"
+        "message": f"UVs projected from camera '{source}' onto '{object_name}'"
     }
 
 

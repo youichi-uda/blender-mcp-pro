@@ -330,9 +330,10 @@ def export_scene(filepath, format=None):
 
 def import_image_as_plane(filepath, location=(0, 0, 0)):
     """
-    Import an image file as a plane in the scene.
+    Import an image file as a textured plane in the scene.
 
-    Enables the 'Import Images as Planes' addon if not already enabled.
+    Creates a plane with the image's aspect ratio and applies the image
+    as a material texture. Works on all Blender versions without addons.
 
     Args:
         filepath: Path to the image file.
@@ -344,44 +345,76 @@ def import_image_as_plane(filepath, location=(0, 0, 0)):
     if not os.path.isfile(filepath):
         return {"status": "error", "message": f"File not found: {filepath}"}
 
-    # Enable the addon if not already enabled
-    addon_name = "io_import_images_as_planes"
     try:
-        if addon_name not in bpy.context.preferences.addons:
-            bpy.ops.preferences.addon_enable(module=addon_name)
+        img = bpy.data.images.load(filepath)
     except Exception as e:
-        return {"status": "error", "message": f"Failed to enable 'Import Images as Planes' addon: {str(e)}"}
+        return {"status": "error", "message": f"Failed to load image: {str(e)}"}
 
-    directory = os.path.dirname(filepath)
-    filename = os.path.basename(filepath)
+    # Calculate aspect ratio for the plane
+    width, height = img.size
+    if width == 0 or height == 0:
+        return {"status": "error", "message": "Image has zero dimensions"}
+    aspect = width / height
 
-    existing_objects = set(obj.name for obj in bpy.data.objects)
+    # Create plane mesh
+    import bmesh
+    mesh = bpy.data.meshes.new(img.name)
+    bm = bmesh.new()
+    half_w = aspect / 2.0
+    half_h = 0.5
+    verts = [
+        bm.verts.new((-half_w, -half_h, 0)),
+        bm.verts.new((half_w, -half_h, 0)),
+        bm.verts.new((half_w, half_h, 0)),
+        bm.verts.new((-half_w, half_h, 0)),
+    ]
+    face = bm.faces.new(verts)
 
-    try:
-        bpy.ops.import_image.to_plane(
-            files=[{"name": filename}],
-            directory=directory,
-        )
-    except Exception as e:
-        return {"status": "error", "message": f"Image import failed: {str(e)}"}
+    # Add UV layer
+    uv_layer = bm.loops.layers.uv.new("UVMap")
+    uvs = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    for loop, uv in zip(face.loops, uvs):
+        loop[uv_layer].uv = uv
 
-    # Find the newly created object
-    new_objects = [obj.name for obj in bpy.data.objects if obj.name not in existing_objects]
+    bm.to_mesh(mesh)
+    bm.free()
 
-    if not new_objects:
-        return {"status": "error", "message": "No object was created during image import"}
+    # Create object
+    obj = bpy.data.objects.new(img.name, mesh)
+    obj.location = location
+    bpy.context.collection.objects.link(obj)
 
-    # Set location on the imported plane
-    obj_name = new_objects[0]
-    obj = bpy.data.objects.get(obj_name)
-    if obj:
-        obj.location = location
+    # Create material with the image texture
+    mat = bpy.data.materials.new(name=img.name + "_Mat")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+
+    output_node = nodes.new("ShaderNodeOutputMaterial")
+    output_node.location = (300, 0)
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (0, 0)
+    tex_node = nodes.new("ShaderNodeTexImage")
+    tex_node.location = (-300, 0)
+    tex_node.image = img
+
+    links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
+    links.new(bsdf.outputs["BSDF"], output_node.inputs["Surface"])
+
+    # Connect alpha if the image has alpha
+    if img.channels == 4:
+        mat.blend_method = 'BLEND' if hasattr(mat, 'blend_method') else mat.blend_method
+        links.new(tex_node.outputs["Alpha"], bsdf.inputs["Alpha"])
+
+    obj.data.materials.append(mat)
 
     return {
         "status": "success",
-        "object_name": obj_name,
+        "object_name": obj.name,
         "filepath": filepath,
         "location": list(location),
+        "image_size": [width, height],
     }
 
 
