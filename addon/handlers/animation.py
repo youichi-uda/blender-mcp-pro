@@ -1,6 +1,23 @@
 import bpy
 
 
+def _get_fcurves(action):
+    """Get fcurves from an action, supporting both legacy and Blender 5.0 layered API."""
+    # Blender 5.0+: layered action (layers -> strips -> channelbags -> fcurves)
+    if hasattr(action, "layers") and len(action.layers) > 0:
+        for layer in action.layers:
+            if hasattr(layer, "strips"):
+                for strip in layer.strips:
+                    if hasattr(strip, "channelbags"):
+                        for cbag in strip.channelbags:
+                            if hasattr(cbag, "fcurves"):
+                                yield from cbag.fcurves
+        return
+    # Legacy (Blender 3.x / 4.x): action.fcurves
+    if hasattr(action, "fcurves"):
+        yield from action.fcurves
+
+
 def set_frame(frame):
     """Set the current frame of the scene."""
     bpy.context.scene.frame_set(frame)
@@ -94,7 +111,7 @@ def set_keyframe_interpolation(object_name, data_path, mode, frame=None):
     action = obj.animation_data.action
     modified = 0
 
-    for fcurve in action.fcurves:
+    for fcurve in _get_fcurves(action):
         if fcurve.data_path == data_path:
             for kp in fcurve.keyframe_points:
                 if frame is None or int(kp.co[0]) == int(frame):
@@ -125,7 +142,7 @@ def get_keyframes(object_name, data_path=None):
     action = obj.animation_data.action
     result = []
 
-    for fcurve in action.fcurves:
+    for fcurve in _get_fcurves(action):
         if data_path is not None and fcurve.data_path != data_path:
             continue
 
@@ -255,7 +272,7 @@ def set_keyframe_handle_type(object_name, data_path, frame, handle_type, index=-
     action = obj.animation_data.action
     modified = 0
 
-    for fcurve in action.fcurves:
+    for fcurve in _get_fcurves(action):
         if fcurve.data_path != data_path:
             continue
         if index >= 0 and fcurve.array_index != index:
