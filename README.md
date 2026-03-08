@@ -1,84 +1,139 @@
-# Blender MCP Pro — Addon
+# Blender MCP Pro
 
-Blender addon that provides a TCP bridge server for [Blender MCP Pro](https://github.com/youichi-uda/blender-mcp-pro-private) MCP server.
+Control Blender entirely from AI assistants (Claude Code, Claude Desktop, Cursor, Windsurf) via MCP.
 
-## Features
+**100+ tools across 14 categories** — Scene management, materials, shader nodes, lights, modifiers, animation, geometry nodes, camera, rendering, import/export, UV/texture, batch processing, asset integration (Poly Haven, Sketchfab), rigging, and code execution.
 
-This addon exposes Blender's full API over a local TCP socket, enabling AI assistants (Claude, Cursor, Windsurf) to control Blender through the MCP protocol.
+## Get Started
 
-**110+ operations across 16 categories:**
+1. **Subscribe on [Gumroad](https://y1uda.gumroad.com/l/bmp)** — 7-day free trial, $5/month
+2. Download the ZIP containing the MCP server and this addon
+3. Follow the setup instructions below
 
-- **Scene & Objects** — Create, modify, delete, transform, collections
-- **Materials** — Principled BSDF, node duplication bug fix
-- **Shader Nodes** — Full node tree control, custom materials
-- **Lights** — Point/Sun/Spot/Area, three-point lighting
-- **Modifiers** — 22 modifier types (Subsurf, Bevel, Boolean, Array...)
-- **Animation** — Keyframes, interpolation, actions, NLA
-- **Geometry Nodes** — Build node networks, connect, parameterize
-- **Camera** — Lens, DOF, tracking, auto-framing
-- **Render** — Engine settings, render to file, viewport screenshot
-- **Import/Export** — FBX, OBJ, GLTF/GLB, USD, STL, DAE, PLY, SVG, ABC
-- **UV & Texture** — 7 unwrap methods, texture baking
-- **Batch Processing** — Multi-camera render, turntable, batch I/O
-- **Assets** — Poly Haven, Sketchfab, Hyper3D Rodin
-- **Rigging** — Armature, bones, vertex groups, constraints
-- **Code Execution** — Run arbitrary Python in Blender context
+## Requirements
+
+- **Blender 4.0+** (5.0 recommended)
+- **Python 3.10+** (for the MCP server)
+- MCP-compatible client (Claude Code / Claude Desktop / Cursor / Windsurf)
 
 ## Installation
 
-1. Download this repository as ZIP (or clone it)
-2. In Blender: **Edit > Preferences > Add-ons > Install**
-3. Select the `addon/` folder (or the ZIP file)
-4. Enable **"Blender MCP Pro"** in the addon list
-5. Open the **N panel** (sidebar) in 3D Viewport > **BM Pro** tab
-6. Click **Start Server**
+### 1. Install MCP server dependencies
 
-The addon listens on `localhost:9877`.
+```bash
+cd server
+pip install -r requirements.txt
+```
 
-## Usage with MCP Server
+### 2. Install the Blender addon
 
-This addon is the Blender-side component. You also need the **Blender MCP Pro MCP Server** to connect your AI assistant:
+1. Open Blender → **Edit > Preferences > Add-ons > Install**
+2. Select the `addon/` folder from the downloaded ZIP
+3. Enable **"Blender MCP Pro"**
+4. Open the 3D Viewport sidebar (N key) → **BM Pro** tab → **Start Server**
 
-Get the MCP server: [Blender MCP Pro](https://buymeacoffee.com/youichi_uda) — $5/month with 7-day free trial.
+### 3. Configure your MCP client
 
-### MCP Client Configuration
+Add the following to your MCP client config. Replace `<path>` with the actual path where you extracted the ZIP.
 
-Add to your MCP client config (e.g., `claude_desktop_config.json`):
+#### Claude Code (`~/.claude.json`)
 
 ```json
 {
   "mcpServers": {
     "blender-mcp-pro": {
       "command": "python",
-      "args": ["/path/to/blender-mcp-pro-private/server.py"]
+      "args": ["<path>/server/server.py"],
+      "env": {
+        "BLENDER_MCP_PRO_LICENSE": "YOUR-LICENSE-KEY"
+      }
     }
   }
 }
 ```
 
+#### Claude Desktop (`claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "blender-mcp-pro": {
+      "command": "python",
+      "args": ["<path>/server/server.py"],
+      "env": {
+        "BLENDER_MCP_PRO_LICENSE": "YOUR-LICENSE-KEY"
+      }
+    }
+  }
+}
+```
+
+#### Cursor / Windsurf
+
+Add `server/server.py` in your MCP settings with the `BLENDER_MCP_PRO_LICENSE` environment variable.
+
+## Usage
+
+1. Start the addon server in Blender (N panel → **BM Pro** → **Start Server**)
+2. Launch your MCP client (e.g., Claude Code)
+3. Control Blender with natural language!
+
+### Examples
+
+```
+"Create a Suzanne and add SubSurf and Bevel modifiers"
+"Create a glass material and apply it"
+"Set up three-point lighting"
+"Set the camera to 85mm lens and track the object"
+"Add a rotation animation"
+"Render at 1920x1080 with Cycles"
+```
+
 ## Architecture
 
 ```
-AI Assistant (Claude/Cursor/Windsurf)
-    |
-    | MCP Protocol (stdio)
-    v
-MCP Server (server.py) — private/paid
-    |
-    | TCP Socket (localhost:9877)
-    v
+AI Assistant (Claude / Cursor / Windsurf)
+    │
+    │ MCP Protocol (stdio)
+    ▼
+MCP Server (server.py)
+    │
+    │ TCP Socket (localhost:9877)
+    ▼
 Blender Addon (this repo)
-    |
-    | bpy API (main thread via Modal Operator)
-    v
+    │
+    │ bpy API (main thread)
+    ▼
 Blender
 ```
 
-The addon uses a **Modal Operator + command queue** pattern to ensure all `bpy` calls happen on the main thread, avoiding Blender's thread-safety restrictions.
+## Tool Categories
+
+| Category | Description |
+|----------|-------------|
+| Scene & Objects | Create, transform, delete objects, manage collections |
+| Materials | Principled BSDF material setup |
+| Shader Nodes | Full node tree control |
+| Lights | Point/Sun/Spot/Area, three-point lighting |
+| Modifiers | 22 modifier types (SubSurf, Bevel, Boolean, Array...) |
+| Animation | Keyframes, interpolation, actions, NLA |
+| Geometry Nodes | Build node networks |
+| Camera | Lens, DOF, tracking, auto-framing |
+| Render | Engine settings, render to file, viewport screenshot |
+| Import/Export | FBX, OBJ, GLTF/GLB, USD, STL, DAE, PLY, SVG, ABC |
+| UV & Texture | 7 unwrap methods, texture baking |
+| Batch Processing | Multi-camera render, turntable |
+| Assets | Poly Haven, Sketchfab, Hyper3D Rodin integration |
+| Rigging | Armature, bones, vertex groups, constraints |
+
+## Lazy Loading
+
+Only 15 core tools are loaded initially. Use `list_tool_categories()` to see all categories, then `enable_tools(category)` to activate on demand.
 
 ## License
 
-MIT License
+- **Blender Addon** (`addon/`) — MIT License
+- **MCP Server** — Proprietary. Distributed via [Gumroad](https://y1uda.gumroad.com/l/bmp).
 
 ## Author
 
