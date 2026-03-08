@@ -25,10 +25,10 @@ def create_camera(name=None, location=(0, 0, 5), rotation=(0, 0, 0), lens=50.0):
     }
 
 
-def set_camera_lens(camera_name, lens_type=None, value=None, clip_start=None,
-                    clip_end=None, shift_x=None, shift_y=None, sensor_width=None,
-                    dof_focus_distance=None, dof_focus_object=None,
-                    dof_aperture_fstop=None):
+def set_camera_lens(camera_name, lens_type=None, focal_length=None, value=None,
+                    clip_start=None, clip_end=None, shift_x=None, shift_y=None,
+                    sensor_width=None, dof_focus_distance=None,
+                    dof_focus_object=None, dof_aperture_fstop=None):
     """Configure lens, clipping, shift, sensor, and DOF settings on a camera."""
     obj = bpy.data.objects.get(camera_name)
     if obj is None:
@@ -42,11 +42,16 @@ def set_camera_lens(camera_name, lens_type=None, value=None, clip_start=None,
         if lens_type not in ("PERSP", "ORTHO", "PANO"):
             return {"status": "error", "message": f"Invalid lens_type: {lens_type}. Must be PERSP, ORTHO, or PANO."}
         cam.type = lens_type
-        if value is not None:
-            if lens_type == "PERSP":
-                cam.lens = value
-            elif lens_type == "ORTHO":
-                cam.ortho_scale = value
+
+    # Support both 'focal_length' and legacy 'value' parameter names
+    focal = focal_length if focal_length is not None else value
+
+    if focal is not None:
+        current_type = cam.type
+        if current_type == "PERSP":
+            cam.lens = focal
+        elif current_type == "ORTHO":
+            cam.ortho_scale = focal
 
     if clip_start is not None:
         cam.clip_start = clip_start

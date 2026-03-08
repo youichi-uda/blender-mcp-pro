@@ -25,13 +25,15 @@ def create_object(type, name=None, location=(0, 0, 0), rotation=(0, 0, 0), scale
         obj.rotation_euler = rotation
         obj.scale = scale
     elif type == "TEXT":
-        bpy.ops.object.text_add(location=location, rotation=rotation, scale=scale)
+        bpy.ops.object.text_add(location=location, rotation=rotation)
         obj = bpy.context.active_object
+        obj.scale = scale
         if name:
             obj.name = name
     elif type in primitive_ops:
-        primitive_ops[type](location=location, rotation=rotation, scale=scale)
+        primitive_ops[type](location=location, rotation=rotation)
         obj = bpy.context.active_object
+        obj.scale = scale
         if name:
             obj.name = name
     else:
@@ -50,10 +52,7 @@ def delete_object(name):
     if not obj:
         return {"error": f"Object '{name}' not found"}
 
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.delete()
+    bpy.data.objects.remove(obj, do_unlink=True)
 
     return {"deleted": name}
 
@@ -64,16 +63,15 @@ def duplicate_object(name, linked=False):
     if not obj:
         return {"error": f"Object '{name}' not found"}
 
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-
     if linked:
-        bpy.ops.object.duplicate_move_linked()
+        new_obj = obj.copy()
     else:
-        bpy.ops.object.duplicate_move()
+        new_obj = obj.copy()
+        if obj.data:
+            new_obj.data = obj.data.copy()
 
-    new_obj = bpy.context.active_object
+    for col in obj.users_collection:
+        col.objects.link(new_obj)
 
     return {
         "original": name,
@@ -196,7 +194,13 @@ def join_objects(object_names):
         obj.select_set(True)
 
     bpy.context.view_layer.objects.active = objects[0]
-    bpy.ops.object.join()
+
+    if hasattr(bpy.context, "temp_override"):
+        with bpy.context.temp_override(active_object=objects[0], selected_objects=objects):
+            bpy.ops.object.join()
+    else:
+        override = {"active_object": objects[0], "selected_objects": objects}
+        bpy.ops.object.join(override)
 
     result_obj = bpy.context.active_object
 

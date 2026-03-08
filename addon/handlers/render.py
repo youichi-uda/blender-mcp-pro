@@ -12,6 +12,31 @@ import tempfile
 import bpy
 
 
+# Max dimension (px) for base64-encoded images returned to the LLM.
+_THUMBNAIL_MAX_PX = 320
+
+
+def _image_to_thumbnail_base64(filepath):
+    """Read *filepath*, resize to fit within _THUMBNAIL_MAX_PX, return base64 JPEG."""
+    tmp_thumb = os.path.join(tempfile.gettempdir(), "bmpro_thumb.jpg")
+
+    img = bpy.data.images.load(filepath, check_existing=False)
+    try:
+        w, h = img.size
+        if w > _THUMBNAIL_MAX_PX or h > _THUMBNAIL_MAX_PX:
+            scale = _THUMBNAIL_MAX_PX / max(w, h)
+            img.scale(max(1, int(w * scale)), max(1, int(h * scale)))
+        img.filepath_raw = tmp_thumb
+        img.file_format = "JPEG"
+        bpy.context.scene.render.image_settings.quality = 50
+        img.save()
+    finally:
+        bpy.data.images.remove(img)
+
+    with open(tmp_thumb, "rb") as fh:
+        return base64.b64encode(fh.read()).decode("ascii")
+
+
 def get_viewport_screenshot(filepath=None):
     """Capture a screenshot of the active 3D viewport.
 
@@ -64,12 +89,11 @@ def get_viewport_screenshot(filepath=None):
         if result != {"FINISHED"}:
             return {"error": "Viewport screenshot failed. Ensure a 3D viewport is visible."}
 
-        # Read the written file and encode to base64
+        # Read the written file, resize, and encode to base64
         if not os.path.isfile(filepath):
             return {"error": f"Screenshot file was not created at {filepath}"}
 
-        with open(filepath, "rb") as fh:
-            image_base64 = base64.b64encode(fh.read()).decode("ascii")
+        image_base64 = _image_to_thumbnail_base64(filepath)
 
         return {
             "filepath": filepath,
@@ -182,11 +206,10 @@ def render_image(output_path, resolution_x=1920, resolution_y=1080,
     if result != {"FINISHED"}:
         return {"error": "Render did not complete successfully."}
 
-    # Base64 encode the result ---
+    # Base64 encode a thumbnail of the result ---
     image_base64 = ""
     if os.path.isfile(output_path):
-        with open(output_path, "rb") as fh:
-            image_base64 = base64.b64encode(fh.read()).decode("ascii")
+        image_base64 = _image_to_thumbnail_base64(output_path)
 
     return {
         "filepath": output_path,

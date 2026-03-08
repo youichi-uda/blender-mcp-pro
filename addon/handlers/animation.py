@@ -52,8 +52,31 @@ def insert_keyframe(object_name, frame, data_path, value=None, index=-1):
         data_path = parts[0]
         index = axis_map[parts[1].lower()]
 
+    # Resolve dotted paths that span ID blocks (e.g. "data.energy")
+    # keyframe_insert must be called on the owning ID block with the local path
+    keyframe_target = obj
+    keyframe_path = data_path
+    if "." in data_path:
+        parts = data_path.split(".")
+        # Walk to the parent of the final property
+        for part in parts[:-1]:
+            next_target = getattr(keyframe_target, part, None)
+            if next_target is None:
+                return {"status": "error", "message": f"Property '{data_path}' not found on object"}
+            keyframe_target = next_target
+        keyframe_path = parts[-1]
+
     if value is not None:
-        prop = getattr(obj, data_path, None)
+        # Coerce value types: MCP may pass strings or ints for float properties
+        if isinstance(value, str):
+            try:
+                value = float(value)
+            except ValueError:
+                pass
+        if isinstance(value, list):
+            value = [float(v) if isinstance(v, str) else v for v in value]
+
+        prop = getattr(keyframe_target, keyframe_path, None)
         if prop is None:
             return {"status": "error", "message": f"Property '{data_path}' not found on object"}
 
@@ -62,14 +85,14 @@ def insert_keyframe(object_name, frame, data_path, value=None, index=-1):
             for i, v in enumerate(value):
                 prop[i] = v
             # Trigger update
-            setattr(obj, data_path, prop)
+            setattr(keyframe_target, keyframe_path, prop)
         elif index >= 0:
             prop[index] = value
-            setattr(obj, data_path, prop)
+            setattr(keyframe_target, keyframe_path, prop)
         else:
-            setattr(obj, data_path, value)
+            setattr(keyframe_target, keyframe_path, value)
 
-    obj.keyframe_insert(data_path=data_path, frame=frame, index=index)
+    keyframe_target.keyframe_insert(data_path=keyframe_path, frame=frame, index=index)
     return {
         "status": "ok",
         "object": object_name,

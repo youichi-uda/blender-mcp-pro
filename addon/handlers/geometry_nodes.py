@@ -480,10 +480,15 @@ def apply_geometry_nodes(object_name, modifier_name=None):
 
     mod_name = mod.name
 
-    # Set active object and apply
+    # Set active object and apply with context override
     bpy.context.view_layer.objects.active = obj
     try:
-        bpy.ops.object.modifier_apply(modifier=mod_name)
+        if hasattr(bpy.context, "temp_override"):
+            with bpy.context.temp_override(object=obj):
+                bpy.ops.object.modifier_apply(modifier=mod_name)
+        else:
+            override = {"object": obj, "active_object": obj}
+            bpy.ops.object.modifier_apply(override, modifier=mod_name)
     except RuntimeError as e:
         return {"status": "error", "message": f"Failed to apply modifier '{mod_name}': {str(e)}"}
 
