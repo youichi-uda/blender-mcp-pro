@@ -163,6 +163,27 @@ Blender
 
 Only 15 core tools are loaded initially. Use `list_tool_categories()` to see all categories, then `enable_tools(category)` to activate on demand.
 
+### Eager mode (for clients without `tools/list_changed` support)
+
+Some MCP clients — notably **VS Code GitHub Copilot Chat** — ignore the `notifications/tools/list_changed` message that `enable_tools()` sends, so newly activated tools never become visible in the tool picker. If you hit this, launch the server with `BLENDER_MCP_PRO_EAGER=1` to pre-register every category at startup:
+
+```json
+{
+  "mcpServers": {
+    "blender-mcp-pro": {
+      "command": "python",
+      "args": ["<path>/server.py"],
+      "env": {
+        "BLENDER_MCP_PRO_LICENSE": "YOUR-LICENSE-KEY",
+        "BLENDER_MCP_PRO_EAGER": "1"
+      }
+    }
+  }
+}
+```
+
+Claude Desktop and Claude Code handle `list_changed` correctly and do not need this flag.
+
 ## License
 
 - **Blender Addon** (`addon/`) — MIT License
