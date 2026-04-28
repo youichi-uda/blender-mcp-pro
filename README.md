@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/youichi-uda-blender-mcp-pro-badge.png)](https://mseep.ai/app/youichi-uda-blender-mcp-pro)
+
 # Blender MCP Pro
 
 Control Blender entirely from AI assistants (Claude Code, Claude Desktop, Cursor, Windsurf) via MCP.
